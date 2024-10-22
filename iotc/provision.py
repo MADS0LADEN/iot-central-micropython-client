@@ -1,16 +1,25 @@
-import sys
 import gc
+import sys
+
 gc.collect()
-import json
-from iotc.constants import IoTCConnectType,encode_uri_component,ConsoleLogger,IoTCLogLevel
-import ubinascii
 import hashlib
+import json
+
+import ubinascii
+
+from iotc.constants import (
+    ConsoleLogger,
+    IoTCConnectType,
+    IoTCLogLevel,
+    encode_uri_component,
+)
 from iotc.hmac import new as hmac
+
 gc.collect()
 try:
-    from utime import time, sleep
+    from utime import sleep, time
 except:
-    print('ERROR: missing dependency `utime`')
+    print("ERROR: missing dependency `utime`")
     sys.exit(1)
 gc.collect()
 
@@ -18,6 +27,7 @@ try:
     import urequests
 except:
     import mip
+
     mip.install("urequests")
     import urequests
 
@@ -25,7 +35,6 @@ gc.collect()
 
 
 class Credentials:
-
     def __init__(self, host, user, password):
         self._host = host
         self._user = user
@@ -44,34 +53,46 @@ class Credentials:
         return self._password
 
     def __str__(self):
-        return 'Host={};User={};Password={}'.format(self._host,self._user,self._password)
+        return "Host={};User={};Password={}".format(
+            self._host, self._user, self._password
+        )
 
 
-class ProvisioningClient():
-
-    def __init__(self, scope_id, registration_id, credentials_type: IoTCConnectType, credentials, logger, model_id=None, endpoint='global.azure-devices-provisioning.net'):
+class ProvisioningClient:
+    def __init__(
+        self,
+        scope_id,
+        registration_id,
+        credentials_type: IoTCConnectType,
+        credentials,
+        logger,
+        model_id=None,
+        endpoint="global.azure-devices-provisioning.net",
+    ):
         self._endpoint = endpoint
         self._scope_id = scope_id
         self._registration_id = registration_id
         self._credentials_type = credentials_type
-        self._api_version = '2019-03-31'
+        self._api_version = "2019-03-31"
         if logger is not None:
-            self._logger=logger
+            self._logger = logger
         else:
-            self._logger=ConsoleLogger(IoTCLogLevel.DISABLED)
+            self._logger = ConsoleLogger(IoTCLogLevel.DISABLED)
 
         if model_id is not None:
             self._model_id = model_id
 
-        if self._credentials_type in (IoTCConnectType.DEVICE_KEY, IoTCConnectType.SYMM_KEY):
+        if self._credentials_type in (
+            IoTCConnectType.DEVICE_KEY,
+            IoTCConnectType.SYMM_KEY,
+        ):
             self._device_key = credentials
             if self._credentials_type == IoTCConnectType.SYMM_KEY:
-                self._device_key = self._compute_key(
-                    credentials, self._registration_id)
+                self._device_key = self._compute_key(credentials, self._registration_id)
                 # self._logger.debug('Device key: {}'.format(self._key_or_cert))
         else:
-            self._key_file = self.credentials['key_file']
-            self._cert_file = self.credentials['cert_file']
+            self._key_file = self.credentials["key_file"]
+            self._cert_file = self.credentials["cert_file"]
             # try:
             #     self._cert_phrase = self.credentials['cert_phrase']
             #     # TODO: x509 = X509(self._cert_file, self._key_file, self._cert_phrase)
@@ -79,49 +100,58 @@ class ProvisioningClient():
             #     # self._logger.debug(
             #         'No passphrase available for certificate. Trying without it')
             #     # TODO: x509 = X509(self._cert_file, self._key_file)
-        self._username = '{}/registrations/{}/api-version={}'.format(
-            scope_id, registration_id, self._api_version)
-        resource_uri = '{}/registrations/{}'.format(
-            scope_id, registration_id)
+        self._username = "{}/registrations/{}/api-version={}".format(
+            scope_id, registration_id, self._api_version
+        )
+        resource_uri = "{}/registrations/{}".format(scope_id, registration_id)
         try:
             from ntptime import settime
+
             settime()
             gc.collect()
-            del sys.modules['ntptime']
+            del sys.modules["ntptime"]
             gc.collect()
         except:
             pass
-        
-        expiry = time() + 946706400   # 6 hours from now in epoch
-        signature = encode_uri_component(self._compute_key(
-            self._device_key, '{}\n{}'.format(resource_uri, expiry)))
-        self._password = 'SharedAccessSignature sr={}&sig={}&se={}&skn=registration'.format(
-            resource_uri, signature, expiry)
+
+        expiry = time() + 946706400  # 6 hours from now in epoch
+        signature = encode_uri_component(
+            self._compute_key(self._device_key, "{}\n{}".format(resource_uri, expiry))
+        )
+        self._password = (
+            "SharedAccessSignature sr={}&sig={}&se={}&skn=registration".format(
+                resource_uri, signature, expiry
+            )
+        )
         del expiry
         del signature
         gc.collect()
         self._logger.debug(self._username)
         self._logger.debug(self._password)
-        self._headers = {"content-type": "application/json; charset=utf-8",
-                         "user-agent": "iot-central-client/1.0", "Accept": "*/*", 'authorization': self._password}
+        self._headers = {
+            "content-type": "application/json; charset=utf-8",
+            "user-agent": "iot-central-client/1.0",
+            "Accept": "*/*",
+            "authorization": self._password,
+        }
 
     def _on_message(self, topic, message):
-        print(topic.decode('utf-8'))
+        print(topic.decode("utf-8"))
 
     def register(self):
         gc.collect()
-        self._logger.debug('Registering...')
-        body = {'registrationId': self._registration_id}
+        self._logger.debug("Registering...")
+        body = {"registrationId": self._registration_id}
         try:
-            body['data'] = {'iotcModelId': self._model_id}
+            body["data"] = {"iotcModelId": self._model_id}
         except:
             pass
 
         uri = "https://{}/{}/registrations/{}/register?api-version={}".format(
-            self._endpoint, self._scope_id, self._registration_id, self._api_version)
-        response = urequests.put(
-            uri, data=json.dumps(body), headers=self._headers)
-        operation_id = json.loads(response.text)['operationId']
+            self._endpoint, self._scope_id, self._registration_id, self._api_version
+        )
+        response = urequests.put(uri, data=json.dumps(body), headers=self._headers)
+        operation_id = json.loads(response.text)["operationId"]
         response.close()
         sleep(5)
         creds = self._loop_assignment(operation_id)
@@ -131,27 +161,41 @@ class ProvisioningClient():
 
     def _loop_assignment(self, operation_id):
         gc.collect()
-        self._logger.debug('Quering registration...')
+        self._logger.debug("Quering registration...")
         uri = "https://{}/{}/registrations/{}/operations/{}?api-version={}".format(
-            self._endpoint, self._scope_id, self._registration_id, operation_id, self._api_version)
+            self._endpoint,
+            self._scope_id,
+            self._registration_id,
+            operation_id,
+            self._api_version,
+        )
         response = urequests.get(uri, headers=self._headers)
         if response.status_code == 202:
-            self._logger.debug('Assigning...')
+            self._logger.debug("Assigning...")
             response.close()
             sleep(3)
             return self._loop_assignment(operation_id)
         elif response.status_code == 200:
-            self._logger.debug('Assigned. {}'.format(response.text))
-            assigned_hub = json.loads(response.text)[
-                'registrationState']['assignedHub']
+            self._logger.debug("Assigned. {}".format(response.text))
+            assigned_hub = json.loads(response.text)["registrationState"]["assignedHub"]
             response.close()
             expiry = time() + 946706400
-            resource_uri = '{}/devices/{}'.format(
-                assigned_hub, self._registration_id)
-            signature = encode_uri_component(self._compute_key(
-                self._device_key, '{}\n{}'.format(resource_uri, expiry)))
-            self._logger.debug('Got hub details')
-            return Credentials(assigned_hub, '{}/{}/?api-version=2019-03-30'.format(assigned_hub, self._registration_id), 'SharedAccessSignature sr={}&sig={}&se={}'.format(resource_uri, signature, expiry))
+            resource_uri = "{}/devices/{}".format(assigned_hub, self._registration_id)
+            signature = encode_uri_component(
+                self._compute_key(
+                    self._device_key, "{}\n{}".format(resource_uri, expiry)
+                )
+            )
+            self._logger.debug("Got hub details")
+            return Credentials(
+                assigned_hub,
+                "{}/{}/?api-version=2019-03-30".format(
+                    assigned_hub, self._registration_id
+                ),
+                "SharedAccessSignature sr={}&sig={}&se={}".format(
+                    resource_uri, signature, expiry
+                ),
+            )
         else:
             return None
 
@@ -162,29 +206,30 @@ class ProvisioningClient():
             self._logger.info("ERROR: broken base64 secret => `" + key + "`")
             sys.exit()
 
-        ret = ubinascii.b2a_base64(hmac(secret, msg=payload.encode(
-            'utf8'), digestmod=hashlib.sha256).digest()).decode('utf-8')
+        ret = ubinascii.b2a_base64(
+            hmac(secret, msg=payload.encode("utf8"), digestmod=hashlib.sha256).digest()
+        ).decode("utf-8")
         ret = ret[:-1]
         return ret
 
     def _clean_imports(self):
         try:
-            del sys.modules['ubinascii']
+            del sys.modules["ubinascii"]
             del ubinascii
         except:
             pass
         try:
-            del sys.modules['hashlib']
+            del sys.modules["hashlib"]
             del hashlib
         except:
             pass
         try:
-            del sys.modules['iotc.hmac']
+            del sys.modules["iotc.hmac"]
             del hmac
         except:
             pass
         try:
-            del sys.modules['urequests']
+            del sys.modules["urequests"]
             del urequests
         except:
             pass
