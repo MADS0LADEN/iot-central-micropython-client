@@ -11,7 +11,7 @@ It can run on various boards with some tweaks for low-memory devices.
 
 ## Prerequisites
 
-+ Micropython 1.20+ (recommended).
++ Micropython 1.23+ (recommended).
 
 ## Import ``iotc``
 
